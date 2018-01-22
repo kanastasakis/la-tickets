@@ -24,7 +24,8 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SECRET_KEY =  os.environ.get('DJANGO_SECRET_KEY', '-ehe1egw1$=9xbpkm29=1ejos_4=*1zw!c=(o%(wu&m#6*1wo4')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = bool(os.environ.get('DJANGO_DEBUG', True))
+d = os.environ.get('DJANGO_DEBUG', 'TRUE')
+DEBUG = d == 'True' or d == 'TRUE' or d == 'true'
 
 # '[".example.com"]'
 ALLOWED_HOSTS = json.loads(os.environ.get('DJANGO_ALLOWED_HOSTS',  '[]'))
@@ -39,12 +40,14 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'rest_framework',
+    'corsheaders',
     'ticketdata.apps.TicketdataConfig',
 ]
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -139,3 +142,5 @@ REST_FRAMEWORK = {
     'DEFAULT_PAGINATION_CLASS':'ticket_data_vis.pagination.TicketsOffsetPagination',
     'PAGE_SIZE':100,
 }
+
+CORS_ORIGIN_WHITELIST = ('localhost:8000', 'localhost:3000', '127.0.0.1:8000', '127.0.0.1:3000')

@@ -20,3 +20,6 @@ tests/report/
 *.sqlite
 *.sqlite3
 notes.txt
+*.csv
+
+data-loader.py
