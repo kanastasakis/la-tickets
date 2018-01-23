@@ -77,7 +77,10 @@ class CountByDay(APIView):
     def get(self, request, format=None):
         values = []
         with connection.cursor() as cursor:
-            cursor.execute("SELECT issue_date as date, COUNT(*) as 'count' FROM ticketdata_ticket GROUP BY issue_date")
+            select_statement = "SELECT issue_date as date, COUNT(*) as 'count' FROM ticketdata_ticket "
+            group_by_clause =  " GROUP BY issue_date "
+            sql_statement, sql_params = createSQLStatement(select_statement, group_by_clause, request)
+            cursor.execute(sql_statement, sql_params)
             values = map(lambda x: DateCount(date=x[0], count=x[1]), cursor.fetchall())
         serializer = DateCountSerializer(instance=values, many=True)
         return Response(serializer.data)
@@ -87,14 +90,16 @@ class FineAvgStdyDayofWeek(APIView):
         values = []
         with connection.cursor() as cursor:
             if settings.DEBUG:
-                cursor.execute('''SELECT strftime('%w', `issue_date`),
-                                AVG(`fine_amount`)
-                                FROM `ticketdata_ticket` GROUP BY strftime('%w', `issue_date`)''')
+                select_statement = "SELECT strftime('%%w', `issue_date`), AVG(`fine_amount`) FROM `ticketdata_ticket` "
+                group_by_clause =  " GROUP BY strftime('%%w', `issue_date`) "
+                sql_statement, sql_params = createSQLStatement(select_statement, group_by_clause, request)
+                cursor.execute(sql_statement, sql_params)
                 values = map(lambda x: DayStats(day=x[0], avg=x[1]), cursor.fetchall())
             else:
-                cursor.execute('''SELECT WEEKDAY(`issue_date`),
-                                AVG(`fine_amount`),STDDEV(`fine_amount`)
-                                FROM `ticketdata_ticket` GROUP BY WEEKDAY(`issue_date`)''')
+                select_statement = "SELECT WEEKDAY(`issue_date`), AVG(`fine_amount`),STDDEV(`fine_amount`) FROM `ticketdata_ticket` "
+                group_by_clause =  " GROUP BY WEEKDAY(`issue_date`) "
+                sql_statement, sql_params = createSQLStatement(select_statement, group_by_clause, request)
+                cursor.execute(sql_statement, sql_params)
                 values = map(lambda x: DayStats(day=x[0], avg=x[1], std=x[2]), cursor.fetchall())                
         serializer = DayStatsSerializer(instance=values, many=True)
         return Response(serializer.data)
@@ -104,14 +109,16 @@ class FineAvgStdyMonthofYear(APIView):
         values = []
         with connection.cursor() as cursor:
             if settings.DEBUG:
-                cursor.execute('''SELECT strftime('%m', `issue_date`),
-                                AVG(`fine_amount`)
-                                FROM `ticketdata_ticket` GROUP BY strftime('%m', `issue_date`)''')
+                select_statement = "SELECT strftime('%%m', `issue_date`), AVG(`fine_amount`) FROM `ticketdata_ticket` "
+                group_by_clause =  " GROUP BY strftime('%%m', `issue_date`) "
+                sql_statement, sql_params = createSQLStatement(select_statement, group_by_clause, request)
+                cursor.execute(sql_statement, sql_params)
                 values = map(lambda x: MonthStats(month=x[0], avg=x[1]), cursor.fetchall())
             else:
-                cursor.execute('''SELECT MONTH(`issue_date`),
-                                AVG(`fine_amount`),STDDEV(`fine_amount`)
-                                FROM `ticketdata_ticket` GROUP BY MONTH(`issue_date`)''')
+                select_statement = "SELECT MONTH(`issue_date`), AVG(`fine_amount`), STDDEV(`fine_amount`) FROM `ticketdata_ticket` "
+                group_by_clause = " GROUP BY MONTH(`issue_date`) "
+                sql_statement, sql_params = createSQLStatement(select_statement, group_by_clause, request)
+                cursor.execute(sql_statement, sql_params)
                 values = map(lambda x: MonthStats(month=x[0], avg=x[1], std=x[2]), cursor.fetchall())
         serializer = MonthStatsSerializer(instance=values, many=True)
         return Response(serializer.data)
@@ -168,5 +175,65 @@ def create_tickets_filter_query_set(request):
             raise exceptions.NotFound(detail="Check the format of start_date and end_date.")
     
     return qs
+
+def createSQLStatement(select_statement, group_by_clause, request):
+    where_clause_tuple = create_where_clause(request)
+    where_clause = where_clause_tuple[0]
+    sql_params = where_clause_tuple[1]
+    return (select_statement + where_clause + group_by_clause, sql_params)
+
+def create_where_clause(request):
+    where_params = []
+    where_clause = ''
+
+    if 'color' in request.query_params:
+        where_clause = where_clause + "AND color = %s "
+        where_params.append(str(request.query_params['color']).upper())
+
+    if 'state' in request.query_params:
+        where_clause = where_clause + 'AND rp_state_plate = %s '
+        where_params.append(str(request.query_params['state']).upper())
+
+    if 'fine_upper'in request.query_params:
+        try:
+            where_clause = where_clause + 'AND fine_amount <= %s '
+            where_params.append(float(str(request.query_params['fine_upper'])))
+        except:
+            raise exceptions.NotFound(detail="Make sure fine_upper is a number")
+    
+    if 'fine_lower'in request.query_params:
+        try:
+            where_clause = where_clause + 'AND fine_amount >= %s '
+            where_params.append(float(str(request.query_params['fine_lower'])))
+        except:
+            raise exceptions.NotFound(detail="Make sure fine_lower is a number")
+    
+    if 'agency'in request.query_params:
+        where_clause = where_clause + 'AND agency = %s '
+        where_params.append(str(request.query_params['agency']).upper())
+
+    if 'violation_description'in request.query_params:
+        where_clause = where_clause + 'AND violation_description LIKE %s'
+        where_params.append(str(request.query_params['violation_description']).upper()[:25])
+
+    if 'make'in request.query_params:
+        where_clause = where_clause + 'AND make = %s'
+        where_params.append(str(request.query_params['make']).upper()[:4])
+
+    '''if 'start_date'in request.query_params and 'end_date'in request.query_params:
+        try:
+            where_clause = where_clause + 'AND rp_state_plate=%s'
+            where_params.append(str(request.query_params['state']).upper())
+
+            start_date = datetime.strptime(request.query_params['start_date'], '%Y-%m-%d')
+            end_date = datetime.strptime(request.query_params['end_date'], '%Y-%m-%d')
+            qs = qs.filter(issue_date__range=(start_date, end_date))
+        except:
+            raise exceptions.NotFound(detail="Check the format of start_date and end_date.")'''
+    
+    if len(where_clause) > 0:
+        where_clause = "WHERE" + where_clause[3:]
+
+    return (where_clause, where_params)
 
 ''' -- -- -- -- HELPER FUNCTIONS END -- -- -- -- '''
