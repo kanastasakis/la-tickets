@@ -4,6 +4,7 @@ from django.conf import settings
 from django.contrib.auth.models import User, Group
 from django.shortcuts import render
 from django.http import HttpResponse
+from django.template import loader
 from django.db import connection
 from django.db.models import Avg, Max, Min, Count
 
@@ -20,7 +21,8 @@ from ticketdata.serializers import TicketSerializer, DateCountSerializer, DaySta
 
 # Create your views here.
 def index(request):
-    return HttpResponse("Hello gus I am working")
+    template = loader.get_template('ticketdata/index.html')
+    return HttpResponse(template.render())
 
 class TicketViewSet(generics.ListAPIView):
     serializer_class = TicketSerializer
